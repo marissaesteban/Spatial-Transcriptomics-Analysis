@@ -1,0 +1,187 @@
+---
+title: "common_mutated_genes"
+author: "Marissa Esteban"
+date: "8/17/2023"
+output: html_document
+---
+
+## Common Mutated Genes
+
+Looking for the commonly mutated genes among all patients using the files \*/top_mutated_all_snps This script creates a df of all of the genes that are common among ALL patients, but also df of genes that are ONLY common for invasive/non inv patients.
+
+Output files:
+
+-   variants_common_genes_all.rds - list of all the SNPs that are located within the common genes. Includes their annotations
+
+    -   variants_common_genes_inv.rds - same as above but only the genes common to invasive patients
+    -   variants_common_genes_non_inv.rds - same as above but only the genes common to NON inv patients
+
+-   
+
+```{r libraries}
+
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(tibble)
+library(ggplot2)
+
+```
+
+This loads in a dataframe of genes that are hit by SNPs for EACH patient. Will produce a list of common genes `common_gene_names_all`, and a dataframe (`all_common_genes`) with all of the variants and their annotations associated with the genes in common_gene_names_all
+
+```{r common genes (all paitents)}
+
+all_snps <- readRDS("/disk2/user/cda/SpatialTranscriptomics/Whole-Genome-Sequencing_Analysis/wholegenomesequencing_breastcancer_summer23/marissa_analysis/SNP_analysis/merged_snp_annotations.rds")
+
+# common genes with SNPs for ALL SNPs (including introns) that pass MQ > 40.0
+s2_all <- readRDS("/disk2/user/cda/SpatialTranscriptomics/Whole-Genome-Sequencing_Analysis/wholegenomesequencing_breastcancer_summer23/marissa_analysis/SNP_analysis/top_mutated_all_snps/S2_top_mutated_all.rds")
+s6_all <- readRDS("/disk2/user/cda/SpatialTranscriptomics/Whole-Genome-Sequencing_Analysis/wholegenomesequencing_breastcancer_summer23/marissa_analysis/SNP_analysis/top_mutated_all_snps/S6_top_mutated_all.rds")
+s7_all <- readRDS("/disk2/user/cda/SpatialTranscriptomics/Whole-Genome-Sequencing_Analysis/wholegenomesequencing_breastcancer_summer23/marissa_analysis/SNP_analysis/top_mutated_all_snps/S7_top_mutated_all.rds")
+s9_all <- readRDS("/disk2/user/cda/SpatialTranscriptomics/Whole-Genome-Sequencing_Analysis/wholegenomesequencing_breastcancer_summer23/marissa_analysis/SNP_analysis/top_mutated_all_snps/S9_top_mutated_all.rds")
+s21_all <- readRDS("/disk2/user/cda/SpatialTranscriptomics/Whole-Genome-Sequencing_Analysis/wholegenomesequencing_breastcancer_summer23/marissa_analysis/SNP_analysis/top_mutated_all_snps/S21_top_mutated_all.rds")
+s32_all <- readRDS("/disk2/user/cda/SpatialTranscriptomics/Whole-Genome-Sequencing_Analysis/wholegenomesequencing_breastcancer_summer23/marissa_analysis/SNP_analysis/top_mutated_all_snps/S32_top_mutated_all.rds")
+s45_all <- readRDS("/disk2/user/cda/SpatialTranscriptomics/Whole-Genome-Sequencing_Analysis/wholegenomesequencing_breastcancer_summer23/marissa_analysis/SNP_analysis/top_mutated_all_snps/S45_top_mutated_all.rds")
+
+common_gene_ids_all <- Reduce(intersect, list(s2_all$gene_ID, s6_all$gene_ID, s7_all$gene_ID, s9_all$gene_ID, s21_all$gene_ID, s32_all$gene_ID, s45_all$gene_ID))
+common_gene_names_all <- Reduce(intersect, list(s2_all$gene_name, s6_all$gene_name, s7_all$gene_name, s9_all$gene_name, s21_all$gene_name, s32_all$gene_name, s45_all$gene_name))
+common_gene_names_all <- common_gene_names_all[common_gene_names_all != ""]
+
+# making a dataframe with all of the mutations pointing to the common genes between all patients
+c_header <- c(colnames(all_snps))
+all_common_genes <- data.frame(matrix(nrow = 0, ncol = length(c_header)))
+colnames(all_common_genes) <- c_header
+
+all_common_genes <- all_snps %>%
+  filter(str_detect(gene_name, paste(common_gene_names_all, collapse = "|"))) %>%
+  mutate(common_gene_match = str_extract(gene_name, paste(common_gene_names_all, collapse = "|", sep = "|"))) %>%
+  select(common_gene_match, everything())
+
+
+output_path <- "/disk2/user/cda/SpatialTranscriptomics/Whole-Genome-Sequencing_Analysis/wholegenomesequencing_breastcancer_summer23/marissa_analysis/SNP_analysis/common_mutated/"
+
+saveRDS(all_common_genes, paste0(output_path, "variants_common_genes_all"))
+
+
+```
+
+Same as above, but creating a df of all the snps associated with the common genes for the invasive/non invasive patients. Saved in dataframes called v`ariants_common_genes_inv.rds`and `variants_common_genes_non_inv.rds`
+
+```{r separating by classification}
+
+common_gene_names_inv <- Reduce(intersect, list(s6_all$gene_name, s7_all$gene_name, s9_all$gene_name, s32_all$gene_name, s45_all$gene_name))
+common_gene_names_inv <- common_gene_names_inv[common_gene_names_inv != ""]
+
+final_common_values <- setdiff(common_gene_names_inv, s2_all$gene_name) # mutated genes that are unique to invasive group
+
+other_gene_names <- c(s6_all$gene_name, s7_all$gene_name, s9_all$gene_name, s32_all$gene_name, s45_all$gene_name)
+unique_to_ninv <- setdiff(s2_all$gene_name, other_gene_names) # Find unique values in s2_all$gene_name that are not present in any of the other data frames
+
+common_genes_inv_df <- all_snps %>%
+  filter(grepl(paste(final_common_values, collapse = "|"), gene_name))
+
+common_genes_ninv_df <- all_snps %>%
+  filter(grepl(paste(unique_to_ninv, collapse = "|"), gene_name))
+
+output_path <- "/disk2/user/cda/SpatialTranscriptomics/Whole-Genome-Sequencing_Analysis/wholegenomesequencing_breastcancer_summer23/marissa_analysis/SNP_analysis/common_mutated/"
+
+saveRDS(common_genes_inv_df, paste0(output_path, "variants_common_genes_inv"))
+saveRDS(common_genes_ninv_df, paste0(output_path, "variants_common_genes_non_inv"))
+
+```
+
+This creates a df of a count matrix that holds the number of SNPs that hit each gene for each patient.
+
+
+```{r Gene: num variants count matrix}
+
+gene_variant_counts <- data.frame(Patient = character(0))
+
+# this list is based from brief look through literature
+common_cancer_related <- c("KCNJ18", "IRF4", "CRLF2", "MIR663AHG", "CNTNAP2", "ADARB2",
+                           "RBMS3", "DUSP22", "KIF26B", "PTPRN2", "NRXN3", "CSMD1", "CTNNA3",
+                           "FHIT")
+
+# Iterate through each common gene name
+for (common_gene in common_gene_names_all) {
+  # Count how many rows match the current gene for each patient
+  gene_counts <- all_snps %>%
+    filter(str_detect(gene_name, common_gene)) %>%
+    group_by(Patient, Chromosome) %>%
+    summarise(Variant_Count = n()) %>%
+    ungroup()
+  
+  # Add a new column with the current gene name
+  gene_counts$Gene = common_gene
+  
+  # Merge the gene counts for the current gene with the main results data frame
+  gene_variant_counts <-rbind(gene_variant_counts, gene_counts)
+}
+
+gene_variant_counts$Chromosome <- sub("chr", "", gene_variant_counts$Chromosome)
+
+
+```
+
+Visualizing this matrix
+
+``` {r variant counts per common gene distribution}
+
+gene_variant_counts$Gene <- factor(gene_variant_counts$Gene, levels = unique(gene_variant_counts$Gene[order(gene_variant_counts$Chromosome)]))
+
+ggplot(gene_variant_counts, aes(x = factor(Patient, level = c("S2", "S7", "S9", "S32", "S6", "S45", "S21")), y= Gene, fill = Variant_Count)) +
+        geom_tile() + 
+        scale_fill_gradient(name = "Variant Count",
+                      low = "#FFFFFF",
+                      high = "#012345") +
+        labs(y = "Common Genes", x = "Patients")
+
+
+ggsave(paste0(output_path, "variant_counts_per_patient.jpg"))
+
+```
+
+Doing the same as the two code chunks above but this time for only cancer related genes.  This is a list that I compiled by doing a quick look into literature for each gene.  Does not include any analysis of novel genes that have a high variant count but no association with literature.
+
+``` {r variant counts per common genes (but cancer related)}
+
+ene_variant_counts <- data.frame(Patient = character(0))
+
+# this list is based from brief look through literature
+common_cancer_related <- c("KCNJ18", "IRF4", "CRLF2", "MIR663AHG", "CNTNAP2", "ADARB2",
+                           "RBMS3", "DUSP22", "KIF26B", "PTPRN2", "NRXN3", "CSMD1", "CTNNA3",
+                           "FHIT")
+
+# Iterate through each common gene name
+for (common_gene in common_cancer_related) {
+  # Count how many rows match the current gene for each patient
+  gene_counts <- all_snps %>%
+    filter(str_detect(gene_name, common_gene)) %>%
+    group_by(Patient, Chromosome) %>%
+    summarise(Variant_Count = n()) %>%
+    ungroup()
+  
+  # Add a new column with the current gene name
+  gene_counts$Gene = common_gene
+  
+  # Merge the gene counts for the current gene with the main results data frame
+  gene_variant_counts <-rbind(gene_variant_counts, gene_counts)
+}
+
+gene_variant_counts$Chromosome <- sub("chr", "", gene_variant_counts$Chromosome)
+
+
+# making the plot
+gene_variant_counts$Gene <- factor(gene_variant_counts$Gene, levels = unique(gene_variant_counts$Gene[order(gene_variant_counts$Chromosome)]))
+
+ggplot(gene_variant_counts, aes(x = factor(Patient, level = c("S2", "S7", "S9", "S32", "S6", "S45", "S21")), y= Gene, fill = Variant_Count)) +
+  geom_tile() + 
+  scale_fill_gradient(name = "Variant Count",
+                      low = "#FFFFFF",
+                      high = "#012345") +
+  labs(y = "Common Genes", x = "Patients")
+
+
+ggsave(paste0(output_path, "cancer_variant_counts_per_patient.jpg"))
+
+```

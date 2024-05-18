@@ -1,0 +1,50 @@
+---
+title: "gene_analysis"
+author: "Marissa Esteban"
+date: "8/17/2023"
+output: html_document
+---
+
+## Common Mutated Genes
+
+Looking at particular genes within the WGS data, and also within the ST data
+
+   
+
+```{r libraries}
+
+library(dplyr)
+library(tidyr)
+library(png)
+
+```
+
+I chose to look at the CSMD1 gene because of its association to BC in literature and because it had SNP data that I could also look closer into.  I looked into the ST data for CSMD1 within S2 but the gene did not have any expression data within the normal or tumor tissue.
+
+
+``` {r CSMD1}
+
+all_snps <- readRDS("/disk2/user/cda/SpatialTranscriptomics/Whole-Genome-Sequencing_Analysis/wholegenomesequencing_breastcancer_summer23/marissa_analysis/SNP_analysis/merged_snp_annotations.rds")
+
+only_csmd1 <- all_snps %>%
+  filter(gene_name == "CSMD1") # change the gene_name to filter the SNP annotations that only associate with this gene
+
+# remove duplicate rows, because some variants were annotated twice...
+only_csmd1 <- only_csmd1 %>% distinct(Chromosome, POS, REF, ALT, gene_name, variant_id, Patient, .keep_all = TRUE)
+
+img <- readPNG(system.file("img", "/disk2/user/cda/SpatialTranscriptomics/Whole-Genome-Sequencing_Analysis/wholegenomesequencing_breastcancer_summer23/marissa_analysis/SNP_analysis/gene_analysis/csmd1_dist_all.png", package="png"))
+grid::grid.raster(img)
+
+```
+
+
+``` {r ERBB2}
+
+all_snps <- readRDS("/disk2/user/cda/SpatialTranscriptomics/Whole-Genome-Sequencing_Analysis/wholegenomesequencing_breastcancer_summer23/marissa_analysis/SNP_analysis/merged_snp_annotations.rds")
+only_erbb2 <- all_snps %>%
+  filter(gene_name == "ERBB2")
+
+# remove duplicate rows, because some variants were annotated twice...
+only_csmd1 <- only_csmd1 %>% distinct(Chromosome, POS, REF, ALT, gene_name, variant_id, Patient, .keep_all = TRUE)
+
+```

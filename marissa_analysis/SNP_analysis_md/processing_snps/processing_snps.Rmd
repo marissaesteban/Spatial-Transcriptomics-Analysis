@@ -1,0 +1,194 @@
+---
+title: "processing_snps.md"
+output: html_document
+---
+
+## Merging output for Strelka SNPs
+
+SNPs defined in these files have only passed the 'PASS' filter. NOT FILTERED BY MQ \> 40.0 YET
+
+Output files:
+
+-   merged_snp_annotations.rds,
+
+-   merged_snp_variants_per_gene.rds
+
+-   *top_mutated_all.rds
+
+```{r libraries}
+
+library(biomaRt)
+library(dplyr)
+library(tidyr)
+
+```
+
+Ensemble is being used to convert the gene ids back to their gene names
+
+```{r ensembl}
+
+# Connect to the Ensembl database
+ensembl <- useEnsembl(biomart = "genes", dataset = "hsapiens_gene_ensembl") # May take a moment
+ensembl_genes <- getBM(attributes = c("ensembl_gene_id", "external_gene_name", "start_position", "end_position"), mart = ensembl)
+ensembl_converter <- ensembl_genes %>%
+    data.frame(name = .$external_gene_name, start = .$start_position, end = .$end_position, row.names = .$ensembl_gene_id)
+
+# Function to get gene length based on gene ID or gene name
+get_gene_length <- function(gene_id_or_name) {
+  
+  if (!(gene_id_or_name %in% rownames(ensembl_converter))) {
+    print(gene_id_or_name)
+    return(1)
+  }
+  
+  gene_length <- ensembl_converter[gene_id_or_name, "end"] - ensembl_converter[gene_id_or_name,"start"] + 1
+  return(gene_length)
+}
+
+```
+
+Output file setup -- The expected input to this are the parsed vcf files as .rsd files (.combined and .variants_per_gene)
+
+```{r output file setup}
+
+input_wd <- "/disk2/user/cda/SpatialTranscriptomics/Whole-Genome-Sequencing_Analysis/wholegenomesequencing_breastcancer_summer23/sarek/Haga_parser/parsed_vcfs4/"
+patients <- c("S2", "S6", "S7", "S9", "S21", "S32", "S45")
+
+# this is getting the headers for the combined and variants per gene files to make the 'merged_*.rds' files
+snp_annotated <- readRDS("/disk2/user/cda/SpatialTranscriptomics/Whole-Genome-Sequencing_Analysis/wholegenomesequencing_breastcancer_summer23/sarek/Haga_parser/parsed_vcfs4/S2/strelka_somatic_snvs.combined.rds")
+var_per_gene <- readRDS("/disk2/user/cda/SpatialTranscriptomics/Whole-Genome-Sequencing_Analysis/wholegenomesequencing_breastcancer_summer23/sarek/Haga_parser/parsed_vcfs4/S2/strelka_somatic_snvs.variants_per_gene.rds")
+
+annotated_header <- c(colnames(c), "Patient")
+vpg_header <- c(colnames(v), "Patient")
+
+merged_snp_annotations <- data.frame(matrix(nrow = 0, ncol = length(c_header)))
+colnames(merged_snp_annotations) <- annotated_header
+merged_snp_variants_per_gene <- data.frame(matrix(nrow = 0, ncol = length(v_header)))
+colnames(merged_snp_variants_per_gene) <- vpg_header
+
+
+```
+
+Will iterate through every patient directory looking for each patients SNP annotated file and then combine them. Will keep the patient ID that is relative to each SNP and gene.
+
+```{r output file setup}
+
+for(patient in patients){
+
+    print(patient)
+
+    path <- paste0(input_wd, patient, "/")
+    file_list <- list.files(path, pattern = "strelka_somatic_snvs")
+
+    for (file in file_list){
+
+        # merging in the combined
+        if (grepl("combined", file)){
+            print("in combined")
+            file_path <- paste0(path, "/", file)
+            snp_annotations <- readRDS(file_path)
+            snp_annotations$Patient <- patient
+
+            common_cols <- intersect(c_header, colnames(snp_annotations))
+            non_common_cols <- setdiff(c_header, colnames(snp_annotations))
+            snp_annotations <- snp_annotations[, common_cols]
+
+            if (length(non_common_cols) != 0 ) {
+
+                for ( col_name in non_common_cols){
+                    snp_annotations[[col_name]] <- NA
+                }
+            }
+
+            merged_snp_annotations <- rbind(merged_snp_annotations, snp_annotations)
+        }
+    }
+}
+
+```
+
+Producing the output files: `merged_snp_annotations.rds` and `merged_snp_variants_per_gene.rds`
+
+```{r output file setup}
+
+output_path <- "/disk2/user/cda/SpatialTranscriptomics/Whole-Genome-Sequencing_Analysis/wholegenomesequencing_breastcancer_summer23/marissa_analysis/SNP_analysis/"
+
+# will filter all of the SNPs so that they have an MQ >= 40.0 (mapping quality)
+filtered_mq <- subset(merged_snp_annotations, MQ >= 40.0)
+filtered_mq <- filtered_mq %>% distinct(Chromosome, POS, REF, ALT, gene_name, variant_id, Patient, .keep_all = TRUE)
+saveRDS(filtered_mq, paste0(output_path, "merged_snp_annotations.rds"))
+
+
+# Creating a variants per gene df using the snp annotations with an MQ >= 40
+merged_variants_per_gene <- filtered_mq %>%
+                        dplyr::select(Chromosome, POS, REF, ALT, gene_ID, Patient)  %>%
+                        filter(gene_ID != "") %>%
+                        separate_longer_delim(c(`gene_ID`), "-") %>%
+                        unique.data.frame() %>%
+                        mutate(variant_id = paste(`Chromosome`, `POS`, `REF`, `ALT`, sep = "_")) %>%
+                        group_by(gene_ID, Patient) %>%
+                        summarise(variants = list(variant_id))
+
+
+merged_variants_per_gene$gene_name <- ensembl_converter[merged_variants_per_gene$gene_ID, "name"]
+
+saveRDS(merged_variants_per_gene, paste0(output_path, "merged_snp_variants_per_gene.rds"))
+
+
+```
+
+
+This is separating the variants_per_gene so each patient has their own file and is ordered by gene length
+
+
+```{r top mutated genes}
+
+variants_per_gene <- readRDS("/disk2/user/cda/SpatialTranscriptomics/Whole-Genome-Sequencing_Analysis/wholegenomesequencing_breastcancer_summer23/marissa_analysis/SNP_analysis/merged_snp_variants_per_gene.rds")
+
+
+# defining df to find the top mutated genes for each patient
+mutated_header <- c(colnames(variants_per_gene))
+
+# finding top mutated genes for each patient based on the master list of of all SNPs
+patients <- c("S2", "S6", "S7", "S9", "S21", "S32", "S45")
+for(patient in patients){
+
+    # filtering by patient (patient_filtered)
+    patient_filtered <- variants_per_gene[variants_per_gene$Patient == patient, ]
+
+    # # splitting the variants column into a list
+    # patient_filtered$variants <- strsplit(patient_filtered$variants, ";")
+
+    # counting number of variants per gene
+    patient_filtered$num_variants <- sapply(patient_filtered$variants, length)
+   
+    # getting the gene lengths for each gene
+    # if gene length doesn't exist, get_gene_length() returns 1 (will filter these genes out)
+    patient_filtered$gene_length <- sapply(patient_filtered$gene_ID, get_gene_length)
+
+    patient_filtered <- patient_filtered %>% filter(gene_length != 1)
+
+    # getting the number of mutations per kb
+    patient_filtered$mut_per_kb <- patient_filtered$num_variants / (patient_filtered$gene_length / 1000)
+
+    # sorting the df based on the number of variants in decending order
+    patient_filtered <- patient_filtered[order(-patient_filtered$mut_per_kb), ]
+
+    patient_filtered$gene_name <- ensembl_converter[patient_filtered$gene_ID, "name"]
+
+    # reordering the columns
+    patient_filtered <- patient_filtered[, c("Patient", "gene_ID", "gene_name", "variants", "num_variants", "mut_per_kb")]
+
+    # saving the rds into a new file
+    output_path <- "/disk2/user/cda/SpatialTranscriptomics/Whole-Genome-Sequencing_Analysis/wholegenomesequencing_breastcancer_summer23/marissa_analysis/SNP_analysis/top_mutated_all_snps/"
+    saveRDS(patient_filtered, paste0(output_path, patient, "_top_mutated_all.rds"))
+
+}
+
+
+```
+
+
+
+
+

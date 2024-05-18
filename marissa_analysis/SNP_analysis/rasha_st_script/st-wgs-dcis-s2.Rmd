@@ -1,0 +1,257 @@
+---
+title: "ST-for-WGS-analysis_DCIS-S2"
+author: "Rasha Aljelaify"
+date: "03/07/2023"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+In this script, we perform unsupervised ST clustering based on gene expression of the following samples of patient#2
+
+
+##Samples/libraries:
+1. V10J20-074-A/control1
+2. V10J20-071-A/control2
+3. V10J20-070-A/Tumor1
+4. V10J20-084-A/Tumor2
+
+#Seurat Object:
+se74A
+se71A
+se70A
+se84A
+
+##set the working dierctory
+
+```{r}
+#setwd("/ST/aim2/aim2-Rdir/")
+```
+
+##Load libraries 
+
+```{r}
+library(Matrix)
+library(dplyr)
+library(Seurat)
+library(ggplot2)
+library(patchwork)
+library(dplyr)
+#library(STutility)
+library(hdf5r)
+#library(EnhancedVolcano)
+```
+
+#ST analysis per sample, one Seurat object per sample
+##Load normalized seurat objects
+
+```{r}
+se74A <- readRDS("/disk2/user/cda/SpatialTranscriptomics/ST-for-WGS-analysis/objects/se74AN.rds")
+se71A <- readRDS("/disk2/user/cda/SpatialTranscriptomics/ST-for-WGS-analysis/objects/se71AN.rds")
+se70A <- readRDS("/disk2/user/cda/SpatialTranscriptomics/ST-for-WGS-analysis/objects/se70AN.rds")
+se84A <- readRDS("/disk2/user/cda/SpatialTranscriptomics/ST-for-WGS-analysis/objects/se84AN.rds")
+```
+
+
+#Dimension reduction using PCA 
+#run pca 
+```{r}
+se74A <- RunPCA(se74A, assay = "SCT", verbose = FALSE)  
+se71A <- RunPCA(se71A, assay = "SCT", verbose = FALSE)  
+se70A <- RunPCA(se70A, assay = "SCT", verbose = FALSE)  
+se84A <- RunPCA(se84A, assay = "SCT", verbose = FALSE)  
+```
+
+
+# Find neighbors, clustering, and run UMAP per sample 
+
+```{r}
+#0.4 controls and 0.5 tumors 
+se74A <- FindNeighbors(se74A, reduction = "pca", dims = 1:40)
+se74A <- FindClusters(se74A, verbose = FALSE, resolution = 0.6)#0.4
+se74A <- RunUMAP(se74A, reduction = "pca", dims = 1:40) 
+
+se71A <- FindNeighbors(se71A, reduction = "pca", dims = 1:40)
+se71A <- FindClusters(se71A, verbose = FALSE, resolution = 0.6)
+se71A <- RunUMAP(se71A, reduction = "pca", dims = 1:40) 
+
+se70A <- FindNeighbors(se70A, reduction = "pca", dims = 1:40)
+se70A <- FindClusters(se70A, verbose = FALSE, resolution = 0.6)#0.5
+se70A <- RunUMAP(se70A, reduction = "pca", dims = 1:40) 
+
+se84A <- FindNeighbors(se84A, reduction = "pca", dims = 1:40)
+se84A <- FindClusters(se84A, verbose = FALSE, resolution = 0.5)#0.5
+se84A <- RunUMAP(se84A, reduction = "pca", dims = 1:40) 
+```
+
+
+
+- Plot the PCA 
+
+```{r}
+PCAPlot(se74A, reduction = "pca", group.by = c("ident", "sampleid2")) + plot_annotation(title = "PCA of 74A/C1")
+
+PCAPlot(se71A, reduction = "pca", group.by = c("ident", "sampleid2")) + plot_annotation(title = "PCA of 71A/C2")
+
+PCAPlot(se70A, reduction = "pca", group.by = c("ident", "sampleid2")) + plot_annotation(title = "PCA of 70A/T1")
+
+PCAPlot(se84A, reduction = "pca", group.by = c("ident", "sampleid2")) + plot_annotation(title = "PCA of 84A/T2")
+```
+
+- Plot the UMAP 
+
+```{r}
+DimPlot(se74A, reduction = "umap", group.by = c("ident", "sampleid2"), pt.size = 1.5) + plot_annotation(title = "UMAP of 74A/C1")
+
+DimPlot(se71A, reduction = "umap", group.by = c("ident", "sampleid2"), pt.size = 1.5) + plot_annotation(title = "UMAP of 71A/C2")
+
+DimPlot(se70A, reduction = "umap", group.by = c("ident", "sampleid2"), pt.size = 1.5) + plot_annotation(title = "UMAP of 70A/T1")
+
+DimPlot(se84A, reduction = "umap", group.by = c("ident", "sampleid2"), pt.size = 1.5) + plot_annotation(title = "UMAP of 84A/T2")
+```
+
+Interactive UMAP:
+
+```{r}
+#LinkedDimPlot(se33A)
+#LinkedDimPlot(se33B)
+#LinkedDimPlot(se33C)
+#LinkedDimPlot(se33D)
+#LinkedDimPlot(se86D)
+```
+
+
+#Spatial plotting of all clusters on every tissue image
+
+```{r}
+SpatialDimPlot(se74A) + plot_annotation(title = "Spatial plot of contorl1(74A) clusters")
+SpatialDimPlot(se71A) + plot_annotation(title = "Spatial plot of contorl2(71A) clusters")
+SpatialDimPlot(se70A) + plot_annotation(title = "Spatial plot of tumor1(70A) clusters")
+SpatialDimPlot(se84A) + plot_annotation(title = "Spatial plot of tumor2(84A) clusters")
+```
+
+# plot every cluster alone, same as above but separately 
+
+```{r}
+SpatialDimPlot(se74A, cells.highlight = CellsByIdentities(se74A), facet.highlight = TRUE, ncol = 4, alpha = c(0.4, 0.5)) + plot_annotation(title = "Spatial plot of contorl1(74A) clusters")
+
+SpatialDimPlot(se71A, cells.highlight = CellsByIdentities(se71A), facet.highlight = TRUE, ncol = 4, alpha = c(0.4, 0.5)) + plot_annotation(title = "Spatial plot of contorl2(71A) clusters")
+
+SpatialDimPlot(se70A, cells.highlight = CellsByIdentities(se70A), facet.highlight = TRUE, ncol = 4, alpha = c(0.4, 0.5)) + plot_annotation(title = "Spatial plot of tumor1(70A) clusters")
+
+SpatialDimPlot(se84A, cells.highlight = CellsByIdentities(se84A), facet.highlight = TRUE, ncol = 4, alpha = c(0.4, 0.5)) + plot_annotation(title = "Spatial plot of tumor2(84A) clusters")
+```
+
+
+#Identify differently expressed genes or higly Variable genes (HVGs) per cluster for every sample
+
+#HVGs based on clusters 
+
+```{r}
+# `PrepSCTFindMarkers` prepares the "data" slot of SCT assay for differential expression and downstream visualisation(https://github.com/zifornd/visium/blob/main/analysis/08-marker-detection.qmd) this for merged or integrsted samples and also to scale the data before DGE. https://search.r-project.org/CRAN/refmans/Seurat/html/PrepSCTFindMarkers.html
+# differential expression genes in all clusters 
+#If you use FindAllMarkers as you describe, then you would be using the @data slot of SCT. However, as per the current recommendation of the authors, it is best to use the @scale.data slot, isn't that so? What slot is used in findallmarker:https://github.com/satijalab/seurat/issues/2180
+#https://github.com/hbctraining/scRNA-seq_online/issues/96
+
+
+HVG.74A <- FindAllMarkers(se74A)
+                              
+# plot top markers genes in the tissue image
+#SpatialFeaturePlot(object = se74A, features = rownames(HVG.74A)[1:5], alpha = c(0.1, 1), ncol = 5)
+
+# Find markers for every cluster compared to all remaining cells, report only the positive ones
+#markers <- FindAllMarkers(object = seurat_integrated, 
+                          #only.pos = TRUE,
+                          #logfc.threshold = 0.25)  
+
+
+HVG.71A <- FindAllMarkers(se71A)
+#SpatialFeaturePlot(object = se71A, features = rownames(HVG.71A)[1:5], alpha = c(0.1, 1), ncol = 5)
+
+
+HVG.70A <- FindAllMarkers(se70A)
+#SpatialFeaturePlot(object = se70A, features = rownames(HVG.70A)[1:5], alpha = c(0.1, 1), ncol = 5)
+
+HVG.84A <- FindAllMarkers(se84A)
+#SpatialFeaturePlot(object = se84A, features = rownames(HVG.84A)[1:5], alpha = c(0.1, 1), ncol = 5)
+
+```
+
+
+
+```{r}
+write.csv(HVG.74A, "/disk2/user/cda/SpatialTranscriptomics/Whole-Genome-Sequencing_Analysis/wholegenomesequencing_breastcancer_summer23/marissa_analysis/SNP_analysis/rasha_st_script/S2-74A-C1.markers.csv")
+write.csv(HVG.71A, "/disk2/user/cda/SpatialTranscriptomics/Whole-Genome-Sequencing_Analysis/wholegenomesequencing_breastcancer_summer23/marissa_analysis/SNP_analysis/rasha_st_script/S2-71A-C2.markers.csv")
+write.csv(HVG.70A, "/disk2/user/cda/SpatialTranscriptomics/Whole-Genome-Sequencing_Analysis/wholegenomesequencing_breastcancer_summer23/marissa_analysis/SNP_analysis/rasha_st_script/S2-70A-T1.markers.csv")
+write.csv(HVG.84A, "/disk2/user/cda/SpatialTranscriptomics/Whole-Genome-Sequencing_Analysis/wholegenomesequencing_breastcancer_summer23/marissa_analysis/SNP_analysis/rasha_st_script/S2-84A-T2_markers.csv")
+```
+
+
+
+```{r}
+#Variable genes: https://github.com/satijalab/seurat/issues/2180. This is my standard set of markers calls for any dataset I get to this point on.
+
+#S2CN.markers <- FindAllMarkers(seS2.CN, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+#S2CN.markers %>% group_by(cluster) %>% top_n(5, avg_log2FC)
+
+#top10 <- S2CN.markers %>% group_by(cluster) %>% top_n(10, avg_log2FC)
+#top25 <- S2CN.markers %>% group_by(cluster) %>% top_n(25, avg_log2FC)
+#top50 <- S2CN.markers %>% group_by(cluster) %>% top_n(50, avg_log2FC)
+
+#write.csv(S2CN.markers, "S2CN.markers.csv")
+#write.csv(top10, "S2CN.top10.csv")
+#write.csv(top25, "S2CN.top25.csv")
+#write.csv(top50, "S2CN.top50.csv")
+
+#S2CN_Clu <- FetchData(seS2.CN, vars = 'ident')
+
+#write.csv(S2CN_Clu, "/disk2/user/rasalj/ST/aim2/aim2-Rdir/HVGs_markers/S2CN_clusters.csv")
+
+
+```
+
+
+
+
+
+#pathologist annotation
+
+```{r}
+knitr::include_graphics('/disk2/user/rasalj/ST/aim2/aim2-Rdir/LB-screenshots/74A.png') 
+knitr::include_graphics('/disk2/user/rasalj/ST/aim2/aim2-Rdir/LB-screenshots/71A.png') 
+knitr::include_graphics('/disk2/user/rasalj/ST/aim2/aim2-Rdir/LB-screenshots/70A.png') 
+knitr::include_graphics('/disk2/user/rasalj/ST/aim2/aim2-Rdir/LB-screenshots/84A.png') 
+```
+
+
+
+#Based on the pathologist annotation:  
+
+- Clusters 0 and 1 are NAT clusters from T1, 70A
+- Clusters 2 and 3 are tumor clusters from T1, 70A
+
+- Clusters 0 and 2 are NAT clusters from T2, 84A
+- Clusters 1, 3, and 4 are tumor clusters from T2, 84A
+
+# for the WGS anlaysis, use the top genes of clusters  2 and 3 from T1, 70A
+# for the WGS anlaysis, use the top genes of clusters  1, 3, and 4 from T2, 84A
+
+
+```{r}
+#WGS analysis, CSMD1
+#tumors
+SpatialFeaturePlot(object = se74A, features = "MSH2", alpha = c(0.1, 1), ncol = )
+SpatialFeaturePlot(object = se71A, features = "MSH2", alpha = c(0.1, 1), ncol = )
+#controls
+SpatialFeaturePlot(object = se70A, features = "MSH2", alpha = c(0.1, 1), ncol = )
+SpatialFeaturePlot(object = se84A, features = "MSH2", alpha = c(0.1, 1), ncol = )
+```
+
+
+```{r}
+sessionInfo()
+```
+
