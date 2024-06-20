@@ -4,19 +4,14 @@ The structure of the repository is as shown below:
 
 Path to Strelka VCF files: **\*\*\*\*\*\*\*\*\*\***
 
-+------------------------+------------------------------------------------------------------------------------------------------------------------------------------------+
 | Folder                 | Description                                                                                                                                    |
-+========================+================================================================================================================================================+
-| Proccessing SNPs       | Taking the Strelka_SNV VCFs (from Sarek) and putting information into .rds files for each patient, and also merged versions with ALL patients. |
-+------------------------+------------------------------------------------------------------------------------------------------------------------------------------------+
-| SNP Distibution        | Visualization of the SNPs on the genome                                                                                                        |
-+------------------------+------------------------------------------------------------------------------------------------------------------------------------------------+
+|------------------------|------------------------------------------------------------------------------------------------------------------------------------------------|
+| Processing SNPs        | Taking the Strelka_SNV VCFs (from Sarek) and putting information into .rds files for each patient, and also merged versions with ALL patients. |
+| SNP Distribution       | Visualization of the SNPs on the genome                                                                                                        |
 | Commonly Mutated Genes | Analyzation of the commonly SNP hit genes                                                                                                      |
-+------------------------+------------------------------------------------------------------------------------------------------------------------------------------------+
 | Gene Analysis          | Mutated genes from WGS --> ST data                                                                                                             |
-|                        |                                                                                                                                                |
 |                        | Diff Expressed genes from ST data --> WGS data                                                                                                 |
-+------------------------+------------------------------------------------------------------------------------------------------------------------------------------------+
+
 
 ### Workflow
 
